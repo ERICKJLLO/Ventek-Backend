@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import { RegisterUserDto } from "../dto/register-user.dto.js";
+import { ConflictError } from "../errors/conflict.error.js";
 import { UserRepository } from "../../domain/repositories/user.repository.js";
 
 export class RegisterUserUseCase {
@@ -9,7 +10,7 @@ export class RegisterUserUseCase {
     const existingUser = await this.userRepository.findByEmail(data.email);
 
     if (existingUser) {
-      throw new Error("El correo electrónico ya está registrado");
+      throw new ConflictError("El correo electrónico ya está registrado");
     }
 
     const passwordHash = await bcrypt.hash(data.password, 10);
