@@ -3,6 +3,7 @@ import { RegisterUserUseCase } from "../../application/use-cases/register-user.u
 import { LoginUserUseCase } from "../../application/use-cases/login-user.use-case.js";
 import { UserRepository } from "../../infrastructure/repositories/user.repository.js";
 import { ValidationError } from "../../application/errors/validation.error.js";
+import { generateToken } from "../../infrastructure/config/jwt.service.js";
 
 const userRepository = new UserRepository();
 const registerUserUseCase = new RegisterUserUseCase(userRepository);
@@ -63,12 +64,20 @@ export class AuthController {
       email: email.trim().toLowerCase(),
       password,
     });
-
-    return res.status(200).json({
+    
+    const token = generateToken({
       id: user.id,
-      name: user.name,
-      email: user.email,
       role: user.role,
+    });
+    
+    return res.status(200).json({
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
     });
   }
 }
