@@ -1,6 +1,7 @@
 import { prisma } from "../database/prisma.js";
+import { UserRepository as UserRepositoryContract } from "../../domain/repositories/user.repository.js";
 
-export class UserRepository {
+export class UserRepository implements UserRepositoryContract {
   async findByEmail(email: string) {
     return prisma.user.findUnique({
       where: {
