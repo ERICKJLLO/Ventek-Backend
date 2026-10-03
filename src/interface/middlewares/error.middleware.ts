@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { ConflictError } from "../../application/errors/conflict.error.js";
+import { ValidationError } from "../../application/errors/validation.error.js";
 
 export function errorMiddleware(
   error: unknown,
@@ -7,6 +8,12 @@ export function errorMiddleware(
   res: Response,
   _next: NextFunction,
 ) {
+  if (error instanceof ValidationError) {
+    return res.status(400).json({
+      message: error.message,
+    });
+  }
+
   if (error instanceof ConflictError) {
     return res.status(409).json({
       message: error.message,
