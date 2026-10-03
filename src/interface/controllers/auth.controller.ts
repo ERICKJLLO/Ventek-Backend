@@ -1,10 +1,12 @@
 import { Request, Response } from "express";
 import { RegisterUserUseCase } from "../../application/use-cases/register-user.use-case.js";
+import { LoginUserUseCase } from "../../application/use-cases/login-user.use-case.js";
 import { UserRepository } from "../../infrastructure/repositories/user.repository.js";
 import { ValidationError } from "../../application/errors/validation.error.js";
 
 const userRepository = new UserRepository();
 const registerUserUseCase = new RegisterUserUseCase(userRepository);
+const loginUserUseCase = new LoginUserUseCase(userRepository);
 
 export class AuthController {
   async register(req: Request, res: Response) {
@@ -36,6 +38,33 @@ export class AuthController {
     });
 
     return res.status(201).json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    });
+  }
+
+  async login(req: Request, res: Response) {
+    const { email, password } = req.body;
+
+    if (
+      typeof email !== "string" ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ) {
+      throw new ValidationError("El correo electrónico no es válido");
+    }
+
+    if (typeof password !== "string" || password.length === 0) {
+      throw new ValidationError("La contraseña es obligatoria");
+    }
+
+    const user = await loginUserUseCase.execute({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+
+    return res.status(200).json({
       id: user.id,
       name: user.name,
       email: user.email,
