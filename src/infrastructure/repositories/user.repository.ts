@@ -8,4 +8,20 @@ export class UserRepository {
       },
     });
   }
+
+  async create(
+    name: string,
+    email: string,
+    passwordHash: string,
+    role: string = "user",
+  ) {
+    return prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+        role,
+      },
+    });
+  }
 }
