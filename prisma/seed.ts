@@ -30,6 +30,10 @@ async function main() {
     });
   }
 
+  await prisma.$executeRawUnsafe(
+    `SELECT setval(pg_get_serial_sequence('"Service"', 'id'), COALESCE((SELECT MAX("id") FROM "Service"), 1), true)`,
+  );
+
   await prisma.user.upsert({
     where: { email: process.env.SEED_ADMIN_EMAIL ?? "admin.local@ventek.test" },
     update: { name: "Administrador local", role: "admin", passwordHash: await bcrypt.hash(adminPassword, 10) },
