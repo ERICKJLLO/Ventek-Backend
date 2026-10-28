@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { Prisma } from "@prisma/client";
 import { ConflictError } from "../../application/errors/conflict.error.js";
 import { ValidationError } from "../../application/errors/validation.error.js";
 import { UnauthorizedError } from "../../application/errors/unauthorized.error.js";
@@ -10,6 +11,26 @@ export function errorMiddleware(
   res: Response,
   _next: NextFunction,
 ) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2002") {
+      return res.status(409).json({
+        message: "El recurso ya existe",
+      });
+    }
+
+    if (error.code === "P2025") {
+      return res.status(404).json({
+        message: "Recurso no encontrado",
+      });
+    }
+
+    if (error.code === "P2003") {
+      return res.status(400).json({
+        message: "La relación indicada no es válida",
+      });
+    }
+  }
+
   if (error instanceof ValidationError) {
     return res.status(400).json({
       message: error.message,

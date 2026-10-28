@@ -41,6 +41,23 @@ Backend de Ventek para ofrecer servicios de desarrollo web y soporte tecnológic
 El puerto predeterminado es `3000`. El backend no está desplegado ni integrado con el
 frontend todavía.
 
+## Pruebas automatizadas
+
+La suite usa el runner `node:test` incluido en Node.js y `fetch` nativo, ejecutada
+mediante `tsx`; no agrega una biblioteca de aserciones o HTTP innecesaria. Las pruebas
+de integración requieren una base PostgreSQL separada:
+
+```bash
+npx prisma migrate deploy
+npm test
+```
+
+Define `TEST_DATABASE_URL` apuntando a una base de pruebas ya creada y aislada de
+`DATABASE_URL`, además de `TEST_ADMIN_PASSWORD` y `TEST_USER_PASSWORD`, para ejecutar
+los escenarios HTTP. La suite no cambia automáticamente la base de desarrollo. Si
+`TEST_DATABASE_URL` no está definida, los 13 casos de integración aparecen como
+omitidos y no deben interpretarse como pruebas pasadas.
+
 ## Autenticación
 
 `POST /api/auth/register` recibe `{ "name", "email", "password" }` y crea un usuario
