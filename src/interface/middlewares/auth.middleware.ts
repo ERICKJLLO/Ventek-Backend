@@ -7,6 +7,10 @@ export interface AuthenticatedRequest extends Request {
   userRole: string;
 }
 
+export function getAuthenticatedRequest(req: Request): AuthenticatedRequest {
+  return req as AuthenticatedRequest;
+}
+
 export function authMiddleware(
   req: Request,
   res: Response,
@@ -28,8 +32,18 @@ export function authMiddleware(
       role: string;
     };
 
-    (req as AuthenticatedRequest).userId = payload.id;
-    (req as AuthenticatedRequest).userRole = payload.role;
+    if (
+      typeof payload.id !== "number" ||
+      !Number.isInteger(payload.id) ||
+      typeof payload.role !== "string"
+    ) {
+      return res.status(401).json({
+        message: "Token inválido o expirado",
+      });
+    }
+
+    getAuthenticatedRequest(req).userId = payload.id;
+    getAuthenticatedRequest(req).userRole = payload.role;
 
     next();
   } catch {
@@ -37,4 +51,18 @@ export function authMiddleware(
       message: "Token inválido o expirado",
     });
   }
+}
+
+export function requireRole(...roles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const authenticatedRequest = getAuthenticatedRequest(req);
+
+    if (!roles.includes(authenticatedRequest.userRole)) {
+      return res.status(403).json({
+        message: "No tienes permisos suficientes",
+      });
+    }
+
+    next();
+  };
 }

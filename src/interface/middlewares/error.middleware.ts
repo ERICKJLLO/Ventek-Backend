@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { ConflictError } from "../../application/errors/conflict.error.js";
 import { ValidationError } from "../../application/errors/validation.error.js";
 import { UnauthorizedError } from "../../application/errors/unauthorized.error.js";
+import { NotFoundError } from "../../application/errors/not-found.error.js";
 
 export function errorMiddleware(
   error: unknown,
@@ -23,6 +24,12 @@ export function errorMiddleware(
 
   if (error instanceof ConflictError) {
     return res.status(409).json({
+      message: error.message,
+    });
+  }
+
+  if (error instanceof NotFoundError) {
+    return res.status(404).json({
       message: error.message,
     });
   }
