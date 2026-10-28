@@ -1,8 +1,13 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import "dotenv/config";
 
 const testDatabaseUrl = process.env.TEST_DATABASE_URL;
 const integrationTest = testDatabaseUrl ? it : it.skip;
+
+if (testDatabaseUrl && testDatabaseUrl === process.env.DATABASE_URL) {
+  throw new Error("TEST_DATABASE_URL debe apuntar a una base separada de DATABASE_URL");
+}
 
 process.env.FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN ?? "http://localhost:3001";
 process.env.JWT_SECRET = process.env.JWT_SECRET ?? "integration-test-secret";
