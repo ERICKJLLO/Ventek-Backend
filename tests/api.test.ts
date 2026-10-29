@@ -181,4 +181,334 @@ describe("API de Ventek", () => {
     assert.equal((await request("GET", "/api/interactions/mias", undefined, "not-a-token")).status, 401);
     assert.equal((await request("GET", "/api/interactions/mias", undefined, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZXhwIjoxfQ.invalid")).status, 401);
   });
+
+  // ── Perfil de usuario ──────────────────────────────────────────────────────
+
+  integrationTest("GET /api/auth/me — rechaza petición sin token", async () => {
+    const res = await request("GET", "/api/auth/me");
+    assert.equal(res.status, 401);
+  });
+
+  integrationTest("GET /api/auth/me — devuelve el perfil del usuario autenticado", async () => {
+    // Corrección 1: usuario propio, independiente de testEmail.
+    const profileEmail = `profile-me-${Date.now()}-${Math.floor(Math.random() * 9999)}@ventek.test`;
+    const reg = await request("POST", "/api/auth/register", {
+      name: "Perfil Me",
+      email: profileEmail,
+      password: "profile-password-ok",
+    });
+    assert.equal(reg.status, 201, "No se pudo registrar el usuario de perfil GET");
+
+    try {
+      const login = await request("POST", "/api/auth/login", {
+        email: profileEmail,
+        password: "profile-password-ok",
+      });
+      assert.equal(login.status, 200);
+      const token = login.body?.token as string;
+
+      const res = await request("GET", "/api/auth/me", undefined, token);
+      assert.equal(res.status, 200);
+      assert.equal(typeof res.body?.id, "number");
+      assert.equal(res.body?.email, profileEmail);
+      assert.ok("phone" in (res.body ?? {}), "la respuesta debe incluir el campo phone");
+    } finally {
+      await prisma.user.deleteMany({ where: { email: profileEmail } });
+    }
+  });
+
+  integrationTest("PUT /api/auth/me — actualiza nombre, correo y teléfono", async () => {
+    // Corrección 1: usuario propio.
+    const profileEmail = `profile-upd-${Date.now()}-${Math.floor(Math.random() * 9999)}@ventek.test`;
+    const updatedEmail = profileEmail.replace("profile-upd-", "profile-upd-new-");
+    const reg = await request("POST", "/api/auth/register", {
+      name: "Perfil Actualizar",
+      email: profileEmail,
+      password: "profile-password-ok",
+    });
+    assert.equal(reg.status, 201, "No se pudo registrar el usuario de perfil PUT");
+
+    try {
+      const login = await request("POST", "/api/auth/login", {
+        email: profileEmail,
+        password: "profile-password-ok",
+      });
+      const token = login.body?.token as string;
+
+      const res = await request("PUT", "/api/auth/me", {
+        name: "Usuario Actualizado",
+        email: updatedEmail,
+        phone: "+521234567890",
+      }, token);
+
+      // Corrección 2: restaurar el correo en finally aunque fallen las aserciones.
+      // El token sigue siendo válido porque el JWT contiene el id, no el correo.
+      try {
+        assert.equal(res.status, 200);
+        assert.equal(res.body?.name, "Usuario Actualizado");
+        assert.equal(res.body?.email, updatedEmail);
+        assert.equal(res.body?.phone, "+521234567890");
+      } finally {
+        await request("PUT", "/api/auth/me", {
+          name: "Perfil Actualizar",
+          email: profileEmail,
+          phone: null,
+        }, token);
+      }
+    } finally {
+      await prisma.user.deleteMany({ where: { email: profileEmail } });
+    }
+  });
+
+  integrationTest("PUT /api/auth/me — phone omitido conserva el valor anterior", async () => {
+    // Corrección 1: usuario propio.
+    const profileEmail = `profile-phone-keep-${Date.now()}-${Math.floor(Math.random() * 9999)}@ventek.test`;
+    const reg = await request("POST", "/api/auth/register", {
+      name: "Perfil Phone Keep",
+      email: profileEmail,
+      password: "profile-password-ok",
+    });
+    assert.equal(reg.status, 201, "No se pudo registrar el usuario de perfil phone-keep");
+
+    try {
+      const login = await request("POST", "/api/auth/login", {
+        email: profileEmail,
+        password: "profile-password-ok",
+      });
+      const token = login.body?.token as string;
+
+      // Asegurar que hay un teléfono guardado
+      await request("PUT", "/api/auth/me", {
+        name: "Perfil Phone Keep",
+        email: profileEmail,
+        phone: "+521234567890",
+      }, token);
+
+      // Actualizar sin enviar phone — debe conservarse
+      const res = await request("PUT", "/api/auth/me", {
+        name: "Perfil Phone Keep",
+        email: profileEmail,
+      }, token);
+      assert.equal(res.status, 200);
+      assert.equal(res.body?.phone, "+521234567890");
+    } finally {
+      await prisma.user.deleteMany({ where: { email: profileEmail } });
+    }
+  });
+
+  integrationTest("PUT /api/auth/me — phone: null elimina el teléfono", async () => {
+    // Corrección 1: usuario propio.
+    const profileEmail = `profile-phone-null-${Date.now()}-${Math.floor(Math.random() * 9999)}@ventek.test`;
+    const reg = await request("POST", "/api/auth/register", {
+      name: "Perfil Phone Null",
+      email: profileEmail,
+      password: "profile-password-ok",
+    });
+    assert.equal(reg.status, 201, "No se pudo registrar el usuario de perfil phone-null");
+
+    try {
+      const login = await request("POST", "/api/auth/login", {
+        email: profileEmail,
+        password: "profile-password-ok",
+      });
+      const token = login.body?.token as string;
+
+      const res = await request("PUT", "/api/auth/me", {
+        name: "Perfil Phone Null",
+        email: profileEmail,
+        phone: null,
+      }, token);
+      assert.equal(res.status, 200);
+      assert.equal(res.body?.phone, null);
+    } finally {
+      await prisma.user.deleteMany({ where: { email: profileEmail } });
+    }
+  });
+
+  integrationTest("PUT /api/auth/me — rechaza correo ya registrado por otro usuario (409)", async () => {
+    // Corrección 4: dos usuarios temporales propios; no se asume ninguna cuenta preexistente.
+    const profileEmail = `profile-conflict-a-${Date.now()}-${Math.floor(Math.random() * 9999)}@ventek.test`;
+    const conflictEmail = `profile-conflict-b-${Date.now()}-${Math.floor(Math.random() * 9999)}@ventek.test`;
+
+    const regA = await request("POST", "/api/auth/register", {
+      name: "Conflicto A",
+      email: profileEmail,
+      password: "conflict-password-ok",
+    });
+    assert.equal(regA.status, 201, "No se pudo registrar el usuario A de conflicto");
+
+    const regB = await request("POST", "/api/auth/register", {
+      name: "Conflicto B",
+      email: conflictEmail,
+      password: "conflict-password-ok",
+    });
+    assert.equal(regB.status, 201, "No se pudo registrar el usuario B de conflicto");
+
+    try {
+      const login = await request("POST", "/api/auth/login", {
+        email: profileEmail,
+        password: "conflict-password-ok",
+      });
+      const token = login.body?.token as string;
+
+      // Intentar tomar el correo que ya pertenece al usuario B → debe devolver 409
+      const res = await request("PUT", "/api/auth/me", {
+        name: "Conflicto A",
+        email: conflictEmail,
+      }, token);
+      assert.equal(res.status, 409);
+    } finally {
+      await prisma.user.deleteMany({ where: { email: { in: [profileEmail, conflictEmail] } } });
+    }
+  });
+
+  integrationTest("PUT /api/auth/me — rechaza datos inválidos (400)", async () => {
+    // Corrección 1: usuario propio.
+    const profileEmail = `profile-invalid-${Date.now()}-${Math.floor(Math.random() * 9999)}@ventek.test`;
+    const reg = await request("POST", "/api/auth/register", {
+      name: "Perfil Inválido",
+      email: profileEmail,
+      password: "profile-password-ok",
+    });
+    assert.equal(reg.status, 201, "No se pudo registrar el usuario de perfil inválido");
+
+    try {
+      const login = await request("POST", "/api/auth/login", {
+        email: profileEmail,
+        password: "profile-password-ok",
+      });
+      const token = login.body?.token as string;
+
+      // Nombre demasiado corto
+      const shortName = await request("PUT", "/api/auth/me", {
+        name: "x",
+        email: profileEmail,
+      }, token);
+      assert.equal(shortName.status, 400);
+
+      // Correo con formato inválido
+      const badEmail = await request("PUT", "/api/auth/me", {
+        name: "Perfil Inválido",
+        email: "no-es-un-correo",
+      }, token);
+      assert.equal(badEmail.status, 400);
+
+      // phone con tipo numérico (no string, no null)
+      const badPhone = await request("PUT", "/api/auth/me", {
+        name: "Perfil Inválido",
+        email: profileEmail,
+        phone: 123,
+      } as unknown as Record<string, unknown>, token);
+      assert.equal(badPhone.status, 400);
+    } finally {
+      await prisma.user.deleteMany({ where: { email: profileEmail } });
+    }
+  });
+
+  // ── Cambio de contraseña ───────────────────────────────────────────────────
+
+  integrationTest("PUT /api/auth/me/password — contraseña actual incorrecta → 401", async () => {
+    // Corrección 1: usuario propio.
+    const profileEmail = `profile-pwd-wrong-${Date.now()}-${Math.floor(Math.random() * 9999)}@ventek.test`;
+    const reg = await request("POST", "/api/auth/register", {
+      name: "Perfil Pwd Wrong",
+      email: profileEmail,
+      password: "profile-password-ok",
+    });
+    assert.equal(reg.status, 201, "No se pudo registrar el usuario pwd-wrong");
+
+    try {
+      const login = await request("POST", "/api/auth/login", {
+        email: profileEmail,
+        password: "profile-password-ok",
+      });
+      const token = login.body?.token as string;
+
+      const res = await request("PUT", "/api/auth/me/password", {
+        currentPassword: "contraseña-incorrecta",
+        newPassword: "nueva-contraseña-valida",
+      }, token);
+      assert.equal(res.status, 401);
+    } finally {
+      await prisma.user.deleteMany({ where: { email: profileEmail } });
+    }
+  });
+
+  integrationTest("PUT /api/auth/me/password — nueva contraseña < 8 caracteres → 400", async () => {
+    // Corrección 1: usuario propio.
+    const profileEmail = `profile-pwd-short-${Date.now()}-${Math.floor(Math.random() * 9999)}@ventek.test`;
+    const reg = await request("POST", "/api/auth/register", {
+      name: "Perfil Pwd Short",
+      email: profileEmail,
+      password: "profile-password-ok",
+    });
+    assert.equal(reg.status, 201, "No se pudo registrar el usuario pwd-short");
+
+    try {
+      const login = await request("POST", "/api/auth/login", {
+        email: profileEmail,
+        password: "profile-password-ok",
+      });
+      const token = login.body?.token as string;
+
+      const res = await request("PUT", "/api/auth/me/password", {
+        currentPassword: "profile-password-ok",
+        newPassword: "corta",
+      }, token);
+      assert.equal(res.status, 400);
+    } finally {
+      await prisma.user.deleteMany({ where: { email: profileEmail } });
+    }
+  });
+
+  integrationTest("PUT /api/auth/me/password — cambio correcto → 204 y permite nuevo login", async () => {
+    // Corrección 1: usuario propio.
+    const profileEmail = `profile-pwd-ok-${Date.now()}-${Math.floor(Math.random() * 9999)}@ventek.test`;
+    const originalPassword = "profile-password-ok";
+    const tempPassword = "nueva-contraseña-123";
+
+    const reg = await request("POST", "/api/auth/register", {
+      name: "Perfil Pwd Ok",
+      email: profileEmail,
+      password: originalPassword,
+    });
+    assert.equal(reg.status, 201, "No se pudo registrar el usuario pwd-ok");
+
+    try {
+      const login = await request("POST", "/api/auth/login", {
+        email: profileEmail,
+        password: originalPassword,
+      });
+      const token = login.body?.token as string;
+
+      // Variable de seguimiento: refleja la contraseña real en la BD en cada momento.
+      // Solo se actualiza tras confirmar que el servidor aceptó el cambio.
+      let currentLivePassword = originalPassword;
+
+      // Corrección 3: restaurar en finally solo si el cambio llegó a aplicarse.
+      try {
+        const change = await request("PUT", "/api/auth/me/password", {
+          currentPassword: originalPassword,
+          newPassword: tempPassword,
+        }, token);
+        assert.equal(change.status, 204);
+        currentLivePassword = tempPassword; // actualizar tras confirmar 204
+
+        const newLogin = await request("POST", "/api/auth/login", {
+          email: profileEmail,
+          password: tempPassword,
+        });
+        assert.equal(newLogin.status, 200);
+      } finally {
+        if (currentLivePassword === tempPassword) {
+          await request("PUT", "/api/auth/me/password", {
+            currentPassword: tempPassword,
+            newPassword: originalPassword,
+          }, token);
+        }
+      }
+    } finally {
+      await prisma.user.deleteMany({ where: { email: profileEmail } });
+    }
+  });
 });
