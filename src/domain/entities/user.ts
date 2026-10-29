@@ -4,6 +4,7 @@ export interface User {
   email: string;
   passwordHash: string;
   role: string;
+  phone: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
