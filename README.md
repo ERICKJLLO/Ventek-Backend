@@ -74,6 +74,9 @@ Un error `401` significa que falta autenticación o el token es inválido. Un er
 |---|---|---|
 | POST | `/api/auth/register` | Público |
 | POST | `/api/auth/login` | Público |
+| GET | `/api/auth/me` | Autenticado |
+| PUT | `/api/auth/me` | Autenticado |
+| PUT | `/api/auth/me/password` | Autenticado |
 | GET | `/api/services?page=1&limit=6` | Público |
 | GET | `/api/services/:id` | Público |
 | POST | `/api/services` | Admin |
@@ -87,6 +90,15 @@ El listado de servicios devuelve `{ pagination, data }`, con `page`, `limit`, `t
 y `totalPages`. Las interacciones reciben `{ "serviceId", "message" }`; el usuario se
 obtiene exclusivamente del JWT. Los datos inválidos devuelven 400, recursos ausentes
 404, credenciales incorrectas 401, permisos insuficientes 403 y correos duplicados 409.
+
+`GET /api/auth/me` devuelve el perfil autenticado (`id`, `name`, `email`, `role`,
+`phone`). `PUT /api/auth/me` actualiza nombre y correo; el teléfono es opcional y, si
+se omite, se conserva el valor guardado. Enviar `"phone": null` lo elimina.
+`PUT /api/auth/me/password` recibe `{ "currentPassword", "newPassword" }` y responde 204.
+
+La migración `20261028190000_agregar_perfil_usuario` agrega el teléfono opcional al
+usuario. Aplícala con `npx prisma migrate deploy` después de revisar la base
+seleccionada; no se ejecuta automáticamente desde el frontend.
 
 ## Seed de demostración
 
