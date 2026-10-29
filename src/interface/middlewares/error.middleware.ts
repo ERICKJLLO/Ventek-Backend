@@ -11,6 +11,15 @@ export function errorMiddleware(
   res: Response,
   _next: NextFunction,
 ) {
+
+  // Solo exponer detalles del error en entornos que no sean producción.
+  if (process.env.NODE_ENV !== "production") {
+    if (error instanceof Error) {
+      console.error("[ERROR BACKEND]", error.name, error.message);
+    } else {
+      console.error("[ERROR BACKEND] Error desconocido", error);
+    }
+  }
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === "P2002") {
       return res.status(409).json({
