@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import cors from "cors";
 import "dotenv/config";
 import authRoutes from "./routes/auth.routes.js";
@@ -16,6 +16,10 @@ if (!allowedOrigin) {
 
 app.use(cors({ origin: allowedOrigin }));
 app.use(express.json());
+
+app.get("/healthz", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/services", serviceRoutes);
